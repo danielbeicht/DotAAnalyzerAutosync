@@ -54,14 +54,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="DotAAnalyzer.exe" size="216512">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="DotAAnalyzer.exe" size="219584">
       <assemblyIdentity name="DotAAnalyzer" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>nThvs9t/vMdSveCvNVE+98zul8J03CECKxUo06NIr4I=</dsig:DigestValue>
+        <dsig:DigestValue>32pCs1vMGyssz/+ZOS8iwN23aD8kfIbadjYifiRUveQ=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>

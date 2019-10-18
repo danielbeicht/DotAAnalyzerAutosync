@@ -22,23 +22,21 @@ namespace DotAAnalyzer
         
         private static System.Timers.Timer aTimer;
         private static List<Hero> heroes;
-        private static int _detectedHeroesCount = 0;
         private static string accountID;
         private static DotaGSIHandler gsiHandler;
+        
+        private Bitmap[] lastScreenshotRadiant = new Bitmap[5];
+        private Bitmap[] lastScreenshotDire = new Bitmap[5];
 
-        private static Bitmap lastScreenshot = null;
+        private Rectangle[] radiantSection = new Rectangle[5];
+        private Rectangle[] direSection = new Rectangle[5];
 
-        private static Bitmap lastScreenshotRadiant1 = null;
-        private static Bitmap lastScreenshotRadiant2 = null;
-        private static Bitmap lastScreenshotRadiant3 = null;
-        private static Bitmap lastScreenshotRadiant4 = null;
-        private static Bitmap lastScreenshotRadiant5 = null;
+        private PictureBox[] radiantPictureBox = new PictureBox[5];
+        private PictureBox[] direPictureBox = new PictureBox[5];
 
-        private static Bitmap lastScreenshotDire1 = null;
-        private static Bitmap lastScreenshotDire2 = null;
-        private static Bitmap lastScreenshotDire3 = null;
-        private static Bitmap lastScreenshotDire4 = null;
-        private static Bitmap lastScreenshotDire5 = null;
+        private Label[] radiantLabel = new Label[5];
+        private Label[] direLabel = new Label[5];
+        
 
 
         private static DotaAnalyzerAutosyncForm instance = null;
@@ -47,15 +45,14 @@ namespace DotAAnalyzer
         public DotaAnalyzerAutosyncForm()
         {
             InitializeComponent();
-            
-            InitializeHeroes();
+
+            InitializeProgramVariables();
             gsiHandler = DotaGSIHandler.Instance;
 
-            aTimer = new System.Timers.Timer(2000);
+            // Initialize timer to call screenshot/check methods periodically every second
+            aTimer = new System.Timers.Timer(1000);
             aTimer.Elapsed += OnTimedEvent;
             aTimer.AutoReset = true;
-
-            lblStatus.Text = "Waiting for pick phase.";
         }
         
         
@@ -71,45 +68,14 @@ namespace DotAAnalyzer
             }
         }
 
-
-        
-        
-        private int detectedHeroesCount
-        {
-            get
-            {
-                return _detectedHeroesCount;
-            }
-            set
-            {
-                _detectedHeroesCount = value;
-                if (_detectedHeroesCount == 10)
-                {
-                    StopTracking();
-                    _detectedHeroesCount = 0;
-                }
-            }
-        }
-
+        // Gets called when DotA 2 GSI detects pick phase
         public void StartTracking(string acID)
         {
             lblStatus.Invoke(new Action(() => lblStatus.Text = "Pick phase in progress. Tracking..."));
-//            RadiantLabel1.Invoke(new Action(() => RadiantLabel1.Visible = true));
-//            RadiantLabel2.Invoke(new Action(() => RadiantLabel2.Visible = true));
-//            RadiantLabel3.Invoke(new Action(() => RadiantLabel3.Visible = true));
-//            RadiantLabel4.Invoke(new Action(() => RadiantLabel4.Visible = true));
-//            RadiantLabel5.Invoke(new Action(() => RadiantLabel5.Visible = true));
-//            DireLabel1.Invoke(new Action(() => DireLabel1.Visible = true));
-//            DireLabel2.Invoke(new Action(() => DireLabel2.Visible = true));
-//            DireLabel3.Invoke(new Action(() => DireLabel3.Visible = true));
-//            DireLabel4.Invoke(new Action(() => DireLabel4.Visible = true));
-//            DireLabel5.Invoke(new Action(() => DireLabel5.Visible = true));
-            
-            
-            
+            trackingStopButton.Invoke(new Action(() => trackingStopButton.Enabled = true));
+            ResetLabelsAndImages();
 
             accountID = acID;
-            Console.WriteLine(accountID);
 
             foreach (Hero hero in heroes)
             {
@@ -117,23 +83,20 @@ namespace DotAAnalyzer
             }
 
             string json = "{\"accountID\":\"" + accountID + "\"" + "}";
-
             PostRequest("newMatch", json);
-
-
             aTimer.Enabled = true;
         }
 
+        // Gets called when DotA 2 GSI detects strategy phase
         public void StopTracking()
         {
-
             if (aTimer.Enabled)
             {
                 aTimer.Enabled = false;
                 Thread.Sleep(1500);
                 OnTimedEvent(null, null);
                 lblStatus.Invoke(new Action(() => lblStatus.Text = "Waiting for pick phase."));
-                ResetLabels();
+                trackingStopButton.Invoke(new Action(() => trackingStopButton.Enabled = false));
             }
         }
 
@@ -142,37 +105,69 @@ namespace DotAAnalyzer
 
         private void OnTimedEvent(Object source, ElapsedEventArgs e)
         {
-            Console.WriteLine("The Elapsed event was raised at {0:HH:mm:ss.fff}");
-
+            // Take screenshot of the upper screen
             Bitmap screenshotBitmap = Screenshot();
-            Image<Bgr, Byte> screenshot = new Image<Bgr, Byte>(screenshotBitmap);
 
+            // Get/Crop radiant images
+            Bitmap[] radiantBitmap = new Bitmap[5];
+            for (int i = 0; i < radiantBitmap.Length; i++)
+            {
+                radiantBitmap[i] = CropImage(screenshotBitmap, radiantSection[i]);
+            }
 
-            //if (lastScreenshot != null)
-            //{
-            //    Image<Bgr, Byte> lScreen = new Image<Bgr, Byte>(lastScreenshot);
-            //    Image<Gray, float> result = screenshot.MatchTemplate(lScreen, TemplateMatchingType.SqdiffNormed);
+            // Get/Crop dire images
+            Bitmap[] direBitmap = new Bitmap[5];
+            for (int i = 0; i < radiantBitmap.Length; i++)
+            {
+                direBitmap[i] = CropImage(screenshotBitmap, direSection[i]);
+            }
 
-            //    double min = 0, max = 0;
-            //    Point maxp = new Point(0, 0);
-            //    Point minp = new Point(0, 0);
-            //    CvInvoke.MinMaxLoc(result, ref min, ref max, ref minp, ref maxp);
+            
+            for (int i = 0; i < 5; i++)
+            {
+                // Check if current screenshot of radiant images differs from last screenshot and search for new heroes if a change was detected
+                if (lastScreenshotRadiant[i] != null)
+                {
+                    if (ImageHasChanged(radiantBitmap[i], lastScreenshotRadiant[i]))
+                    {
+                        SearchImageForHero(radiantBitmap[i], true);
+                    }
+                }
+                else
+                {
+                    SearchImageForHero(radiantBitmap[i], true);
+                }
+                lastScreenshotRadiant[i] = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat);
 
-            //    if (min < 0.01)
-            //    {
-            //        Console.WriteLine("SAME");
-            //    } else
-            //    {
-            //        Console.WriteLine("NOT SAME");
-            //    }
+                // Check if current screenshot of dire images differs from last screenshot and search for new heroes if a change was detected
+                if (lastScreenshotDire[i] != null)
+                {
+                    if (ImageHasChanged(direBitmap[i], lastScreenshotDire[i]))
+                    {
+                        SearchImageForHero(direBitmap[i], false);
+                    }
+                }
+                else
+                {
+                    SearchImageForHero(direBitmap[i], false);
+                }
+                lastScreenshotDire[i] = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat);
+            }
 
-            //    lastScreenshot = screenshotBitmap.Clone(new Rectangle(0, 0, screenshotBitmap.Width, screenshotBitmap.Height), screenshotBitmap.PixelFormat);
-            //} else
-            //{
-            //    lastScreenshot = screenshotBitmap.Clone(new Rectangle(0, 0, screenshotBitmap.Width, screenshotBitmap.Height), screenshotBitmap.PixelFormat);
-            //}
+            // Display images in windows form
+            for (int i = 0; i < 5; i++)
+            {
+                radiantPictureBox[i].Invoke(new Action(() => radiantPictureBox[i].Image = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat)));
+                radiantPictureBox[i].Invoke(new Action(() => radiantPictureBox[i].SizeMode = PictureBoxSizeMode.AutoSize));
+                direPictureBox[i].Invoke(new Action(() => direPictureBox[i].Image = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat)));
+                direPictureBox[i].Invoke(new Action(() => direPictureBox[i].SizeMode = PictureBoxSizeMode.AutoSize));
+            }
+        }
 
-
+        // Creates new Thread for every hero search
+        private void SearchImageForHero(Bitmap b, bool isRadiant)
+        {
+            Image<Bgr, Byte> screenshot = new Image<Bgr, Byte>(b);
 
             List<Task> tasks = new List<Task>();
 
@@ -180,7 +175,7 @@ namespace DotAAnalyzer
             {
                 if (hero.image != null && !hero.alreadyDetected)
                 {
-                    Task task = Task.Factory.StartNew(() => DoWork(hero, screenshot));
+                    Task task = Task.Factory.StartNew(() => SearchHero(hero, screenshot, isRadiant));
                     tasks.Add(task);
                 }
             }
@@ -189,8 +184,8 @@ namespace DotAAnalyzer
             screenshot.Dispose();
         }
 
-
-        private void DoWork(Hero hero, Image<Bgr, Byte> screenshot)
+        // Looks for hero on cropped image
+        private void SearchHero(Hero hero, Image<Bgr, Byte> screenshot, bool isRadiant)
         {
             Image<Gray, float> result = screenshot.MatchTemplate(hero.image, TemplateMatchingType.SqdiffNormed);
 
@@ -202,21 +197,20 @@ namespace DotAAnalyzer
             if (min < 0.01)
             {
                 hero.alreadyDetected = true;
-                detectedHeroesCount++;
 
-                string isRadiant = "false";
+                string isRadiantString = "false";
 
-                if (minp.X < 1280)
+                if (isRadiant)
                 {
-                    isRadiant = "true";
+                    isRadiantString = "true";
                 }
 
                 string json = "{\"accountID\":\"" + accountID + "\"," +
                                   "\"heroID\":" + hero.id +
-                                  ",\"isRadiant\":" + isRadiant + "}";
+                                  ",\"isRadiant\":" + isRadiantString + "}";
 
                 PostRequest("addHeroToMatch", json);
-                if (isRadiant.Equals("true"))
+                if (isRadiantString.Equals("true"))
                 {
                     RadiantPick(hero.name);
                 }
@@ -230,7 +224,7 @@ namespace DotAAnalyzer
         }
 
 
-
+        // Take screenshot and crop it to pick area
         private Bitmap Screenshot()
         {
             //Bitmap in größe der Bildschirmauflösung anlegen
@@ -245,102 +239,28 @@ namespace DotAAnalyzer
                                      0, 0, screen.Size);
             g.Dispose();
 
-            //Rectangle section = new Rectangle(new Point(278, 0), new Size(2002, 86));
-            Rectangle section = new Rectangle(new Point(288, 0), new Size(135, 86));
-            //screen = CropImage(screen, section);
-            screen = CropImage(screen, section);
-
-
-
-
-
-
-
-
-
-
-
-
-            if (lastScreenshot != null)
-            {
-                Image<Bgr, Byte> lScreen = new Image<Bgr, Byte>(lastScreenshot);
-                Image<Bgr, Byte> cScreen = new Image<Bgr, Byte>(screen);
-                Image<Gray, float> result = cScreen.MatchTemplate(lScreen, TemplateMatchingType.SqdiffNormed);
-
-                double min = 0, max = 0;
-                Point maxp = new Point(0, 0);
-                Point minp = new Point(0, 0);
-                CvInvoke.MinMaxLoc(result, ref min, ref max, ref minp, ref maxp);
-
-                if (min < 0.01)
-                {
-                    Console.WriteLine("SAME");
-                }
-                else
-                {
-                    Console.WriteLine("NOT SAME");
-                }
-
-                lastScreenshot = screen.Clone(new Rectangle(0, 0, screen.Width, screen.Height), screen.PixelFormat);
-            }
-            else
-            {
-                lastScreenshot = screen.Clone(new Rectangle(0, 0, screen.Width, screen.Height), screen.PixelFormat);
-            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            //Screenshot zurückgeben
-            pictureBox1.Invoke(new Action(() => pictureBox1.Image = screen.Clone(new Rectangle(0, 0, screen.Width, screen.Height), screen.PixelFormat)));
-            pictureBox1.Invoke(new Action(() => pictureBox1.SizeMode = PictureBoxSizeMode.AutoSize));
-
-
             return screen;
         }
+
+        // Checks if two bitmaps have a major difference
+        private bool ImageHasChanged(Bitmap newImage, Bitmap oldImage)
+        {
+            Image<Bgr, Byte> lScreen = new Image<Bgr, Byte>(oldImage);
+            Image<Bgr, Byte> cScreen = new Image<Bgr, Byte>(newImage);
+            Image<Gray, float> result = cScreen.MatchTemplate(lScreen, TemplateMatchingType.SqdiffNormed);
+
+            double min = 0, max = 0;
+            Point maxp = new Point(0, 0);
+            Point minp = new Point(0, 0);
+            CvInvoke.MinMaxLoc(result, ref min, ref max, ref minp, ref maxp);
+
+            if (min < 0.01)
+            {
+                return false;
+            }
+            return true;
+        }
+
 
         private Bitmap CropImage(Bitmap source, Rectangle section)
         {
@@ -366,17 +286,52 @@ namespace DotAAnalyzer
                 streamWriter.Write(json);
             }
 
-            Console.WriteLine("SEND MESSAGE");
             var httpResponse = (HttpWebResponse)httpWebRequest.GetResponse();
             using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
             {
-                var result1 = streamReader.ReadToEnd();
+                var result = streamReader.ReadToEnd();
             }
         }
 
 
-        private void InitializeHeroes()
+        private void InitializeProgramVariables()
         {
+            radiantSection[0] = new Rectangle(new Point(292, 0), new Size(130, 94));
+            radiantSection[1] = new Rectangle(new Point(457, 0), new Size(130, 94));
+            radiantSection[2] = new Rectangle(new Point(622, 0), new Size(130, 94));
+            radiantSection[3] = new Rectangle(new Point(787, 0), new Size(130, 94));
+            radiantSection[4] = new Rectangle(new Point(952, 0), new Size(130, 94));
+            
+            direSection[0] = new Rectangle(new Point(1476, 0), new Size(130, 94));
+            direSection[1] = new Rectangle(new Point(1641, 0), new Size(130, 94));
+            direSection[2] = new Rectangle(new Point(1806, 0), new Size(130, 94));
+            direSection[3] = new Rectangle(new Point(1971, 0), new Size(130, 94));
+            direSection[4] = new Rectangle(new Point(2136, 0), new Size(130, 94));
+
+            radiantPictureBox[0] = radiant1PictureBox;
+            radiantPictureBox[1] = radiant2PictureBox;
+            radiantPictureBox[2] = radiant3PictureBox;
+            radiantPictureBox[3] = radiant4PictureBox;
+            radiantPictureBox[4] = radiant5PictureBox;
+
+            direPictureBox[0] = dire1PictureBox;
+            direPictureBox[1] = dire2PictureBox;
+            direPictureBox[2] = dire3PictureBox;
+            direPictureBox[3] = dire4PictureBox;
+            direPictureBox[4] = dire5PictureBox;
+
+            radiantLabel[0] = RadiantLabel1;
+            radiantLabel[1] = RadiantLabel2;
+            radiantLabel[2] = RadiantLabel3;
+            radiantLabel[3] = RadiantLabel4;
+            radiantLabel[4] = RadiantLabel5;
+
+            direLabel[0] = DireLabel1;
+            direLabel[1] = DireLabel2;
+            direLabel[2] = DireLabel3;
+            direLabel[3] = DireLabel4;
+            direLabel[4] = DireLabel5;
+
             heroes = new List<Hero>();
             heroes.Add(new Hero(1, "anti_mage"));
             heroes.Add(new Hero(2, "axe"));
@@ -497,71 +452,44 @@ namespace DotAAnalyzer
             heroes.Add(new Hero(129, "mars"));
         }
         
-        private void RadiantPick(string heroName) {
-
-            if (RadiantLabel1.Text.Equals("Radiant1"))
+        private void RadiantPick(string heroName)
+        {
+            for (int i=0; i<5; i++)
             {
-                RadiantLabel1.Invoke(new Action(() => RadiantLabel1.Text = heroName));
-            } else if (RadiantLabel2.Text.Equals("Radiant2"))
-            {
-                RadiantLabel2.Invoke(new Action(() => RadiantLabel2.Text = heroName));
-            } else if (RadiantLabel3.Text.Equals("Radiant3"))
-            {
-                RadiantLabel3.Invoke(new Action(() => RadiantLabel3.Text = heroName));
-            } else if (RadiantLabel4.Text.Equals("Radiant4"))
-            {
-                RadiantLabel4.Invoke(new Action(() => RadiantLabel4.Text = heroName));
-            } else if (RadiantLabel5.Text.Equals("Radiant5"))
-            {
-                RadiantLabel5.Invoke(new Action(() => RadiantLabel5.Text = heroName));
+                if (radiantLabel[i].Text.Equals("Radiant" + (i + 1)))
+                {
+                    radiantLabel[i].Invoke(new Action(() => radiantLabel[i].Text = heroName));
+                    break;
+                }
             }
         }
         
         private void DirePick(string heroName) {
-            if (DireLabel1.Text.Equals("Dire1"))
+
+            for (int i = 0; i < 5; i++)
             {
-                DireLabel1.Invoke(new Action(() => DireLabel1.Text = heroName));
-            } else if (DireLabel2.Text.Equals("Dire2"))
-            {
-                DireLabel2.Invoke(new Action(() => DireLabel2.Text = heroName));
-            } else if (DireLabel3.Text.Equals("Dire3"))
-            {
-                DireLabel3.Invoke(new Action(() => DireLabel3.Text = heroName));
-            } else if (DireLabel4.Text.Equals("Dire4"))
-            {
-                DireLabel4.Invoke(new Action(() => DireLabel4.Text = heroName));
-            } else if (DireLabel5.Text.Equals("Dire5"))
-            {
-                DireLabel5.Invoke(new Action(() => DireLabel5.Text = heroName));
+                if (direLabel[i].Text.Equals("Dire" + (i + 1)))
+                {
+                    direLabel[i].Invoke(new Action(() => direLabel[i].Text = heroName));
+                    break;
+                }
             }
         }
 
-        private void ResetLabels()
+        private void ResetLabelsAndImages()
         {
-            RadiantLabel1.Invoke(new Action(() => RadiantLabel1.Text = "Radiant1"));
-            RadiantLabel2.Invoke(new Action(() => RadiantLabel2.Text = "Radiant2"));
-            RadiantLabel3.Invoke(new Action(() => RadiantLabel3.Text = "Radiant3"));
-            RadiantLabel4.Invoke(new Action(() => RadiantLabel4.Text = "Radiant4"));
-            RadiantLabel5.Invoke(new Action(() => RadiantLabel5.Text = "Radiant5"));
-            
-//            RadiantLabel1.Invoke(new Action(() => RadiantLabel1.Visible = false));
-//            RadiantLabel2.Invoke(new Action(() => RadiantLabel2.Visible = false));
-//            RadiantLabel3.Invoke(new Action(() => RadiantLabel3.Visible = false));
-//            RadiantLabel4.Invoke(new Action(() => RadiantLabel4.Visible = false));
-//            RadiantLabel5.Invoke(new Action(() => RadiantLabel5.Visible = false));
-
-            DireLabel1.Invoke(new Action(() => DireLabel1.Text = "Dire1"));
-            DireLabel2.Invoke(new Action(() => DireLabel2.Text = "Dire2"));
-            DireLabel3.Invoke(new Action(() => DireLabel3.Text = "Dire3"));
-            DireLabel4.Invoke(new Action(() => DireLabel4.Text = "Dire4"));
-            DireLabel5.Invoke(new Action(() => DireLabel5.Text = "Dire5"));
-            
-//            DireLabel1.Invoke(new Action(() => DireLabel1.Visible = false));
-//            DireLabel2.Invoke(new Action(() => DireLabel2.Visible = false));
-//            DireLabel3.Invoke(new Action(() => DireLabel3.Visible = false));
-//            DireLabel4.Invoke(new Action(() => DireLabel4.Visible = false));
-//            DireLabel5.Invoke(new Action(() => DireLabel5.Visible = false));
+            for (int i=0; i<5; i++)
+            {
+                radiantLabel[i].Invoke(new Action(() => radiantLabel[i].Text = "Radiant" + (i+1)));
+                direLabel[i].Invoke(new Action(() => direLabel[i].Text = "Dire" + (i+1)));
+                radiantPictureBox[i].Invoke(new Action(() => radiantPictureBox[i].Image = null));
+                direPictureBox[i].Invoke(new Action(() => direPictureBox[i].Image = null));
+            }
         }
 
+        private void trackingStopButton_Click(object sender, EventArgs e)
+        {
+            StopTracking();
+        }
     }
 }
