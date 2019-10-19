@@ -36,8 +36,6 @@ namespace DotAAnalyzer
 
         private Label[] radiantLabel = new Label[5];
         private Label[] direLabel = new Label[5];
-        
-
 
         private static DotaAnalyzerAutosyncForm instance = null;
         
@@ -130,12 +128,12 @@ namespace DotAAnalyzer
                 {
                     if (ImageHasChanged(radiantBitmap[i], lastScreenshotRadiant[i]))
                     {
-                        SearchImageForHero(radiantBitmap[i], true);
+                        SearchImageForHero(radiantBitmap[i], true, i);
                     }
                 }
                 else
                 {
-                    SearchImageForHero(radiantBitmap[i], true);
+                    SearchImageForHero(radiantBitmap[i], true, i);
                 }
                 lastScreenshotRadiant[i] = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat);
 
@@ -144,12 +142,12 @@ namespace DotAAnalyzer
                 {
                     if (ImageHasChanged(direBitmap[i], lastScreenshotDire[i]))
                     {
-                        SearchImageForHero(direBitmap[i], false);
+                        SearchImageForHero(direBitmap[i], false, i);
                     }
                 }
                 else
                 {
-                    SearchImageForHero(direBitmap[i], false);
+                    SearchImageForHero(direBitmap[i], false, i);
                 }
                 lastScreenshotDire[i] = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat);
             }
@@ -165,7 +163,7 @@ namespace DotAAnalyzer
         }
 
         // Creates new Thread for every hero search
-        private void SearchImageForHero(Bitmap b, bool isRadiant)
+        private void SearchImageForHero(Bitmap b, bool isRadiant, int playerNumber)
         {
             Image<Bgr, Byte> screenshot = new Image<Bgr, Byte>(b);
 
@@ -175,7 +173,7 @@ namespace DotAAnalyzer
             {
                 if (hero.image != null && !hero.alreadyDetected)
                 {
-                    Task task = Task.Factory.StartNew(() => SearchHero(hero, screenshot, isRadiant));
+                    Task task = Task.Factory.StartNew(() => SearchHero(hero, screenshot, isRadiant, playerNumber));
                     tasks.Add(task);
                 }
             }
@@ -185,7 +183,7 @@ namespace DotAAnalyzer
         }
 
         // Looks for hero on cropped image
-        private void SearchHero(Hero hero, Image<Bgr, Byte> screenshot, bool isRadiant)
+        private void SearchHero(Hero hero, Image<Bgr, Byte> screenshot, bool isRadiant, int playerNumber)
         {
             Image<Gray, float> result = screenshot.MatchTemplate(hero.image, TemplateMatchingType.SqdiffNormed);
 
@@ -212,11 +210,11 @@ namespace DotAAnalyzer
                 PostRequest("addHeroToMatch", json);
                 if (isRadiantString.Equals("true"))
                 {
-                    RadiantPick(hero.name);
+                    RadiantPick(hero.name, playerNumber);
                 }
                 else
                 {
-                    DirePick(hero.name);
+                    DirePick(hero.name, playerNumber);
                 }
             }
 
@@ -452,27 +450,20 @@ namespace DotAAnalyzer
             heroes.Add(new Hero(129, "mars"));
         }
         
-        private void RadiantPick(string heroName)
+        private void RadiantPick(string heroName, int playerNumber)
         {
-            for (int i=0; i<5; i++)
+
+            if (radiantLabel[playerNumber].Text.Equals("Radiant" + (playerNumber + 1)))
             {
-                if (radiantLabel[i].Text.Equals("Radiant" + (i + 1)))
-                {
-                    radiantLabel[i].Invoke(new Action(() => radiantLabel[i].Text = heroName));
-                    break;
-                }
+                radiantLabel[playerNumber].Invoke(new Action(() => radiantLabel[playerNumber].Text = heroName));
             }
+
         }
         
-        private void DirePick(string heroName) {
-
-            for (int i = 0; i < 5; i++)
+        private void DirePick(string heroName, int playerName) {
+            if (direLabel[playerName].Text.Equals("Dire" + (playerName + 1)))
             {
-                if (direLabel[i].Text.Equals("Dire" + (i + 1)))
-                {
-                    direLabel[i].Invoke(new Action(() => direLabel[i].Text = heroName));
-                    break;
-                }
+                direLabel[playerName].Invoke(new Action(() => direLabel[playerName].Text = heroName));
             }
         }
 
