@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
@@ -20,27 +16,27 @@ namespace DotAAnalyzer
     public partial class DotaAnalyzerAutosyncForm : Form
     {
         
-        private static System.Timers.Timer aTimer;
-        private static List<Hero> heroes;
-        private static string accountID;
-        private static DotaGSIHandler gsiHandler;
+        private readonly System.Timers.Timer _aTimer;
+        private List<Hero> _heroes;
+        private string _accountId;
+        private DotaGSIHandler gsiHandler;
         
-        private Bitmap[] lastScreenshotRadiant = new Bitmap[5];
-        private Bitmap[] lastScreenshotDire = new Bitmap[5];
+        private Bitmap[] _lastScreenshotRadiant = new Bitmap[5];
+        private Bitmap[] _lastScreenshotDire = new Bitmap[5];
 
-        private Rectangle[] radiantSection = new Rectangle[5];
-        private Rectangle[] direSection = new Rectangle[5];
+        private Rectangle[] _radiantSection = new Rectangle[5];
+        private Rectangle[] _direSection = new Rectangle[5];
 
-        private PictureBox[] radiantPictureBox = new PictureBox[5];
-        private PictureBox[] direPictureBox = new PictureBox[5];
+        private PictureBox[] _radiantPictureBox = new PictureBox[5];
+        private PictureBox[] _direPictureBox = new PictureBox[5];
 
-        private Label[] radiantLabel = new Label[5];
-        private Label[] direLabel = new Label[5];
+        private Label[] _radiantLabel = new Label[5];
+        private Label[] _direLabel = new Label[5];
 
-        private static DotaAnalyzerAutosyncForm instance = null;
-        
-        
-        public DotaAnalyzerAutosyncForm()
+        private static DotaAnalyzerAutosyncForm _instance = null;
+
+
+        private DotaAnalyzerAutosyncForm()
         {
             InitializeComponent();
 
@@ -48,9 +44,9 @@ namespace DotAAnalyzer
             gsiHandler = DotaGSIHandler.Instance;
 
             // Initialize timer to call screenshot/check methods periodically every second
-            aTimer = new System.Timers.Timer(1000);
-            aTimer.Elapsed += OnTimedEvent;
-            aTimer.AutoReset = true;
+            _aTimer = new System.Timers.Timer(1000);
+            _aTimer.Elapsed += OnTimedEvent;
+            _aTimer.AutoReset = true;
         }
         
         
@@ -58,11 +54,11 @@ namespace DotAAnalyzer
         {
             get
             {
-                if (instance == null)
+                if (_instance == null)
                 {
-                    instance = new DotaAnalyzerAutosyncForm();
+                    _instance = new DotaAnalyzerAutosyncForm();
                 }
-                return instance;
+                return _instance;
             }
         }
 
@@ -73,24 +69,24 @@ namespace DotAAnalyzer
             trackingStopButton.Invoke(new Action(() => trackingStopButton.Enabled = true));
             ResetLabelsAndImages();
 
-            accountID = acID;
+            _accountId = acID;
 
-            foreach (Hero hero in heroes)
+            foreach (Hero hero in _heroes)
             {
                 hero.alreadyDetected = false;
             }
 
-            string json = "{\"accountID\":\"" + accountID + "\"" + "}";
+            string json = "{\"accountID\":\"" + _accountId + "\"" + "}";
             PostRequest("newMatch", json);
-            aTimer.Enabled = true;
+            _aTimer.Enabled = true;
         }
 
         // Gets called when DotA 2 GSI detects strategy phase
         public void StopTracking()
         {
-            if (aTimer.Enabled)
+            if (_aTimer.Enabled)
             {
-                aTimer.Enabled = false;
+                _aTimer.Enabled = false;
                 Thread.Sleep(1500);
                 OnTimedEvent(null, null);
                 lblStatus.Invoke(new Action(() => lblStatus.Text = "Waiting for pick phase."));
@@ -110,23 +106,23 @@ namespace DotAAnalyzer
             Bitmap[] radiantBitmap = new Bitmap[5];
             for (int i = 0; i < radiantBitmap.Length; i++)
             {
-                radiantBitmap[i] = CropImage(screenshotBitmap, radiantSection[i]);
+                radiantBitmap[i] = CropImage(screenshotBitmap, _radiantSection[i]);
             }
 
             // Get/Crop dire images
             Bitmap[] direBitmap = new Bitmap[5];
             for (int i = 0; i < radiantBitmap.Length; i++)
             {
-                direBitmap[i] = CropImage(screenshotBitmap, direSection[i]);
+                direBitmap[i] = CropImage(screenshotBitmap, _direSection[i]);
             }
 
             
             for (int i = 0; i < 5; i++)
             {
                 // Check if current screenshot of radiant images differs from last screenshot and search for new heroes if a change was detected
-                if (lastScreenshotRadiant[i] != null)
+                if (_lastScreenshotRadiant[i] != null)
                 {
-                    if (ImageHasChanged(radiantBitmap[i], lastScreenshotRadiant[i]))
+                    if (ImageHasChanged(radiantBitmap[i], _lastScreenshotRadiant[i]))
                     {
                         SearchImageForHero(radiantBitmap[i], true, i);
                     }
@@ -135,12 +131,12 @@ namespace DotAAnalyzer
                 {
                     SearchImageForHero(radiantBitmap[i], true, i);
                 }
-                lastScreenshotRadiant[i] = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat);
+                _lastScreenshotRadiant[i] = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat);
 
                 // Check if current screenshot of dire images differs from last screenshot and search for new heroes if a change was detected
-                if (lastScreenshotDire[i] != null)
+                if (_lastScreenshotDire[i] != null)
                 {
-                    if (ImageHasChanged(direBitmap[i], lastScreenshotDire[i]))
+                    if (ImageHasChanged(direBitmap[i], _lastScreenshotDire[i]))
                     {
                         SearchImageForHero(direBitmap[i], false, i);
                     }
@@ -149,16 +145,16 @@ namespace DotAAnalyzer
                 {
                     SearchImageForHero(direBitmap[i], false, i);
                 }
-                lastScreenshotDire[i] = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat);
+                _lastScreenshotDire[i] = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat);
             }
 
             // Display images in windows form
             for (int i = 0; i < 5; i++)
             {
-                radiantPictureBox[i].Invoke(new Action(() => radiantPictureBox[i].Image = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat)));
-                radiantPictureBox[i].Invoke(new Action(() => radiantPictureBox[i].SizeMode = PictureBoxSizeMode.AutoSize));
-                direPictureBox[i].Invoke(new Action(() => direPictureBox[i].Image = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat)));
-                direPictureBox[i].Invoke(new Action(() => direPictureBox[i].SizeMode = PictureBoxSizeMode.AutoSize));
+                _radiantPictureBox[i].Invoke(new Action(() => _radiantPictureBox[i].Image = radiantBitmap[i].Clone(new Rectangle(0, 0, radiantBitmap[i].Width, radiantBitmap[i].Height), radiantBitmap[i].PixelFormat)));
+                _radiantPictureBox[i].Invoke(new Action(() => _radiantPictureBox[i].SizeMode = PictureBoxSizeMode.AutoSize));
+                _direPictureBox[i].Invoke(new Action(() => _direPictureBox[i].Image = direBitmap[i].Clone(new Rectangle(0, 0, direBitmap[i].Width, direBitmap[i].Height), direBitmap[i].PixelFormat)));
+                _direPictureBox[i].Invoke(new Action(() => _direPictureBox[i].SizeMode = PictureBoxSizeMode.AutoSize));
             }
         }
 
@@ -169,7 +165,7 @@ namespace DotAAnalyzer
 
             List<Task> tasks = new List<Task>();
 
-            foreach (Hero hero in heroes)
+            foreach (Hero hero in _heroes)
             {
                 if (hero.image != null && !hero.alreadyDetected)
                 {
@@ -203,7 +199,7 @@ namespace DotAAnalyzer
                     isRadiantString = "true";
                 }
 
-                string json = "{\"accountID\":\"" + accountID + "\"," +
+                string json = "{\"accountID\":\"" + _accountId + "\"," +
                                   "\"heroID\":" + hero.id +
                                   ",\"isRadiant\":" + isRadiantString + "}";
 
@@ -294,176 +290,176 @@ namespace DotAAnalyzer
 
         private void InitializeProgramVariables()
         {
-            radiantSection[0] = new Rectangle(new Point(292, 0), new Size(130, 94));
-            radiantSection[1] = new Rectangle(new Point(457, 0), new Size(130, 94));
-            radiantSection[2] = new Rectangle(new Point(622, 0), new Size(130, 94));
-            radiantSection[3] = new Rectangle(new Point(787, 0), new Size(130, 94));
-            radiantSection[4] = new Rectangle(new Point(952, 0), new Size(130, 94));
+            _radiantSection[0] = new Rectangle(new Point(292, 0), new Size(130, 94));
+            _radiantSection[1] = new Rectangle(new Point(457, 0), new Size(130, 94));
+            _radiantSection[2] = new Rectangle(new Point(622, 0), new Size(130, 94));
+            _radiantSection[3] = new Rectangle(new Point(787, 0), new Size(130, 94));
+            _radiantSection[4] = new Rectangle(new Point(952, 0), new Size(130, 94));
             
-            direSection[0] = new Rectangle(new Point(1476, 0), new Size(130, 94));
-            direSection[1] = new Rectangle(new Point(1641, 0), new Size(130, 94));
-            direSection[2] = new Rectangle(new Point(1806, 0), new Size(130, 94));
-            direSection[3] = new Rectangle(new Point(1971, 0), new Size(130, 94));
-            direSection[4] = new Rectangle(new Point(2136, 0), new Size(130, 94));
+            _direSection[0] = new Rectangle(new Point(1476, 0), new Size(130, 94));
+            _direSection[1] = new Rectangle(new Point(1641, 0), new Size(130, 94));
+            _direSection[2] = new Rectangle(new Point(1806, 0), new Size(130, 94));
+            _direSection[3] = new Rectangle(new Point(1971, 0), new Size(130, 94));
+            _direSection[4] = new Rectangle(new Point(2136, 0), new Size(130, 94));
 
-            radiantPictureBox[0] = radiant1PictureBox;
-            radiantPictureBox[1] = radiant2PictureBox;
-            radiantPictureBox[2] = radiant3PictureBox;
-            radiantPictureBox[3] = radiant4PictureBox;
-            radiantPictureBox[4] = radiant5PictureBox;
+            _radiantPictureBox[0] = radiant1PictureBox;
+            _radiantPictureBox[1] = radiant2PictureBox;
+            _radiantPictureBox[2] = radiant3PictureBox;
+            _radiantPictureBox[3] = radiant4PictureBox;
+            _radiantPictureBox[4] = radiant5PictureBox;
 
-            direPictureBox[0] = dire1PictureBox;
-            direPictureBox[1] = dire2PictureBox;
-            direPictureBox[2] = dire3PictureBox;
-            direPictureBox[3] = dire4PictureBox;
-            direPictureBox[4] = dire5PictureBox;
+            _direPictureBox[0] = dire1PictureBox;
+            _direPictureBox[1] = dire2PictureBox;
+            _direPictureBox[2] = dire3PictureBox;
+            _direPictureBox[3] = dire4PictureBox;
+            _direPictureBox[4] = dire5PictureBox;
 
-            radiantLabel[0] = RadiantLabel1;
-            radiantLabel[1] = RadiantLabel2;
-            radiantLabel[2] = RadiantLabel3;
-            radiantLabel[3] = RadiantLabel4;
-            radiantLabel[4] = RadiantLabel5;
+            _radiantLabel[0] = RadiantLabel1;
+            _radiantLabel[1] = RadiantLabel2;
+            _radiantLabel[2] = RadiantLabel3;
+            _radiantLabel[3] = RadiantLabel4;
+            _radiantLabel[4] = RadiantLabel5;
 
-            direLabel[0] = DireLabel1;
-            direLabel[1] = DireLabel2;
-            direLabel[2] = DireLabel3;
-            direLabel[3] = DireLabel4;
-            direLabel[4] = DireLabel5;
+            _direLabel[0] = DireLabel1;
+            _direLabel[1] = DireLabel2;
+            _direLabel[2] = DireLabel3;
+            _direLabel[3] = DireLabel4;
+            _direLabel[4] = DireLabel5;
 
-            heroes = new List<Hero>();
-            heroes.Add(new Hero(1, "anti_mage"));
-            heroes.Add(new Hero(2, "axe"));
-            heroes.Add(new Hero(3, "bane"));
-            heroes.Add(new Hero(4, "bloodseeker"));
-            heroes.Add(new Hero(5, "crystal_maiden"));
-            heroes.Add(new Hero(6, "drow_ranger"));
-            heroes.Add(new Hero(7, "earthshaker"));
-            heroes.Add(new Hero(8, "juggernaut"));
-            heroes.Add(new Hero(9, "mirana"));
-            heroes.Add(new Hero(10, "morphling"));
-            heroes.Add(new Hero(11, "shadow_fiend"));
-            heroes.Add(new Hero(12, "phantom_lancer"));
-            heroes.Add(new Hero(13, "puck"));
-            heroes.Add(new Hero(14, "pudge"));
-            heroes.Add(new Hero(15, "razor"));
-            heroes.Add(new Hero(16, "sand_king"));
-            heroes.Add(new Hero(17, "storm_spirit"));
-            heroes.Add(new Hero(18, "sven"));
-            heroes.Add(new Hero(19, "tiny"));
-            heroes.Add(new Hero(20, "vengeful_spirit"));
-            heroes.Add(new Hero(21, "windranger"));
-            heroes.Add(new Hero(22, "zeus"));
-            heroes.Add(new Hero(23, "kunkka"));
-            heroes.Add(new Hero(25, "lina"));
-            heroes.Add(new Hero(26, "lion"));
-            heroes.Add(new Hero(27, "shadow_shaman"));
-            heroes.Add(new Hero(28, "slardar"));
-            heroes.Add(new Hero(29, "tidehunter"));
-            heroes.Add(new Hero(30, "witch_doctor"));
-            heroes.Add(new Hero(31, "lich"));
-            heroes.Add(new Hero(32, "riki"));
-            heroes.Add(new Hero(33, "enigma"));
-            heroes.Add(new Hero(34, "tinker"));
-            heroes.Add(new Hero(35, "sniper"));
-            heroes.Add(new Hero(36, "necrophos"));
-            heroes.Add(new Hero(37, "warlock"));
-            heroes.Add(new Hero(38, "beastmaster"));
-            heroes.Add(new Hero(39, "queen_of_pain"));
-            heroes.Add(new Hero(40, "venomancer"));
-            heroes.Add(new Hero(41, "faceless_void"));
-            heroes.Add(new Hero(42, "wraith_king"));
-            heroes.Add(new Hero(43, "death_prophet"));
-            heroes.Add(new Hero(44, "phantom_assassin"));
-            heroes.Add(new Hero(45, "pugna"));
-            heroes.Add(new Hero(46, "templar_assassin"));
-            heroes.Add(new Hero(47, "viper"));
-            heroes.Add(new Hero(48, "luna"));
-            heroes.Add(new Hero(49, "dragon_knight"));
-            heroes.Add(new Hero(50, "dazzle"));
-            heroes.Add(new Hero(51, "clockwerk"));
-            heroes.Add(new Hero(52, "leshrac"));
-            heroes.Add(new Hero(53, "natures_prophet"));
-            heroes.Add(new Hero(54, "lifestealer"));
-            heroes.Add(new Hero(55, "dark_seer"));
-            heroes.Add(new Hero(56, "clinkz"));
-            heroes.Add(new Hero(57, "omniknight"));
-            heroes.Add(new Hero(58, "enchantress"));
-            heroes.Add(new Hero(59, "huskar"));
-            heroes.Add(new Hero(60, "night_stalker"));
-            heroes.Add(new Hero(61, "broodmother"));
-            heroes.Add(new Hero(62, "bounty_hunter"));
-            heroes.Add(new Hero(63, "weaver"));
-            heroes.Add(new Hero(64, "jakiro"));
-            heroes.Add(new Hero(65, "batrider"));
-            heroes.Add(new Hero(66, "chen"));
-            heroes.Add(new Hero(67, "spectre"));
-            heroes.Add(new Hero(68, "ancient_apparition"));
-            heroes.Add(new Hero(69, "doom"));
-            heroes.Add(new Hero(70, "ursa"));
-            heroes.Add(new Hero(71, "spirit_breaker"));
-            heroes.Add(new Hero(72, "gyrocopter"));
-            heroes.Add(new Hero(73, "alchemist"));
-            heroes.Add(new Hero(74, "invoker"));
-            heroes.Add(new Hero(75, "silencer"));
-            heroes.Add(new Hero(76, "outworld_devourer"));
-            heroes.Add(new Hero(77, "lycan"));
-            heroes.Add(new Hero(78, "brewmaster"));
-            heroes.Add(new Hero(79, "shadow_demon"));
-            heroes.Add(new Hero(80, "lone_druid"));
-            heroes.Add(new Hero(81, "chaos_knight"));
-            heroes.Add(new Hero(82, "meepo"));
-            heroes.Add(new Hero(83, "treant_protector"));
-            heroes.Add(new Hero(84, "ogre_magi"));
-            heroes.Add(new Hero(85, "undying"));
-            heroes.Add(new Hero(86, "rubick"));
-            heroes.Add(new Hero(87, "disruptor"));
-            heroes.Add(new Hero(88, "nyx_assassin"));
-            heroes.Add(new Hero(89, "naga_siren"));
-            heroes.Add(new Hero(90, "keeper_of_the_light"));
-            heroes.Add(new Hero(91, "io"));
-            heroes.Add(new Hero(92, "visage"));
-            heroes.Add(new Hero(93, "slark"));
-            heroes.Add(new Hero(94, "medusa"));
-            heroes.Add(new Hero(95, "troll_warlord"));
-            heroes.Add(new Hero(96, "centaur_warrunner"));
-            heroes.Add(new Hero(97, "magnus"));
-            heroes.Add(new Hero(98, "timbersaw"));
-            heroes.Add(new Hero(99, "bristleback"));
-            heroes.Add(new Hero(100, "tusk"));
-            heroes.Add(new Hero(101, "skywrath_mage"));
-            heroes.Add(new Hero(102, "abaddon"));
-            heroes.Add(new Hero(103, "elder_titan"));
-            heroes.Add(new Hero(104, "legion_commander"));
-            heroes.Add(new Hero(105, "techies"));
-            heroes.Add(new Hero(106, "ember_spirit"));
-            heroes.Add(new Hero(107, "earth_spirit"));
-            heroes.Add(new Hero(108, "underlord"));
-            heroes.Add(new Hero(109, "terrorblade"));
-            heroes.Add(new Hero(110, "phoenix"));
-            heroes.Add(new Hero(111, "oracle"));
-            heroes.Add(new Hero(112, "winter_wyvern"));
-            heroes.Add(new Hero(113, "arc_warden"));
-            heroes.Add(new Hero(114, "monkey_king"));
-            heroes.Add(new Hero(119, "dark_willow"));
-            heroes.Add(new Hero(120, "pangolier"));
-            heroes.Add(new Hero(121, "grimstroke"));
-            heroes.Add(new Hero(129, "mars"));
+            _heroes = new List<Hero>();
+            _heroes.Add(new Hero(1, "anti_mage"));
+            _heroes.Add(new Hero(2, "axe"));
+            _heroes.Add(new Hero(3, "bane"));
+            _heroes.Add(new Hero(4, "bloodseeker"));
+            _heroes.Add(new Hero(5, "crystal_maiden"));
+            _heroes.Add(new Hero(6, "drow_ranger"));
+            _heroes.Add(new Hero(7, "earthshaker"));
+            _heroes.Add(new Hero(8, "juggernaut"));
+            _heroes.Add(new Hero(9, "mirana"));
+            _heroes.Add(new Hero(10, "morphling"));
+            _heroes.Add(new Hero(11, "shadow_fiend"));
+            _heroes.Add(new Hero(12, "phantom_lancer"));
+            _heroes.Add(new Hero(13, "puck"));
+            _heroes.Add(new Hero(14, "pudge"));
+            _heroes.Add(new Hero(15, "razor"));
+            _heroes.Add(new Hero(16, "sand_king"));
+            _heroes.Add(new Hero(17, "storm_spirit"));
+            _heroes.Add(new Hero(18, "sven"));
+            _heroes.Add(new Hero(19, "tiny"));
+            _heroes.Add(new Hero(20, "vengeful_spirit"));
+            _heroes.Add(new Hero(21, "windranger"));
+            _heroes.Add(new Hero(22, "zeus"));
+            _heroes.Add(new Hero(23, "kunkka"));
+            _heroes.Add(new Hero(25, "lina"));
+            _heroes.Add(new Hero(26, "lion"));
+            _heroes.Add(new Hero(27, "shadow_shaman"));
+            _heroes.Add(new Hero(28, "slardar"));
+            _heroes.Add(new Hero(29, "tidehunter"));
+            _heroes.Add(new Hero(30, "witch_doctor"));
+            _heroes.Add(new Hero(31, "lich"));
+            _heroes.Add(new Hero(32, "riki"));
+            _heroes.Add(new Hero(33, "enigma"));
+            _heroes.Add(new Hero(34, "tinker"));
+            _heroes.Add(new Hero(35, "sniper"));
+            _heroes.Add(new Hero(36, "necrophos"));
+            _heroes.Add(new Hero(37, "warlock"));
+            _heroes.Add(new Hero(38, "beastmaster"));
+            _heroes.Add(new Hero(39, "queen_of_pain"));
+            _heroes.Add(new Hero(40, "venomancer"));
+            _heroes.Add(new Hero(41, "faceless_void"));
+            _heroes.Add(new Hero(42, "wraith_king"));
+            _heroes.Add(new Hero(43, "death_prophet"));
+            _heroes.Add(new Hero(44, "phantom_assassin"));
+            _heroes.Add(new Hero(45, "pugna"));
+            _heroes.Add(new Hero(46, "templar_assassin"));
+            _heroes.Add(new Hero(47, "viper"));
+            _heroes.Add(new Hero(48, "luna"));
+            _heroes.Add(new Hero(49, "dragon_knight"));
+            _heroes.Add(new Hero(50, "dazzle"));
+            _heroes.Add(new Hero(51, "clockwerk"));
+            _heroes.Add(new Hero(52, "leshrac"));
+            _heroes.Add(new Hero(53, "natures_prophet"));
+            _heroes.Add(new Hero(54, "lifestealer"));
+            _heroes.Add(new Hero(55, "dark_seer"));
+            _heroes.Add(new Hero(56, "clinkz"));
+            _heroes.Add(new Hero(57, "omniknight"));
+            _heroes.Add(new Hero(58, "enchantress"));
+            _heroes.Add(new Hero(59, "huskar"));
+            _heroes.Add(new Hero(60, "night_stalker"));
+            _heroes.Add(new Hero(61, "broodmother"));
+            _heroes.Add(new Hero(62, "bounty_hunter"));
+            _heroes.Add(new Hero(63, "weaver"));
+            _heroes.Add(new Hero(64, "jakiro"));
+            _heroes.Add(new Hero(65, "batrider"));
+            _heroes.Add(new Hero(66, "chen"));
+            _heroes.Add(new Hero(67, "spectre"));
+            _heroes.Add(new Hero(68, "ancient_apparition"));
+            _heroes.Add(new Hero(69, "doom"));
+            _heroes.Add(new Hero(70, "ursa"));
+            _heroes.Add(new Hero(71, "spirit_breaker"));
+            _heroes.Add(new Hero(72, "gyrocopter"));
+            _heroes.Add(new Hero(73, "alchemist"));
+            _heroes.Add(new Hero(74, "invoker"));
+            _heroes.Add(new Hero(75, "silencer"));
+            _heroes.Add(new Hero(76, "outworld_devourer"));
+            _heroes.Add(new Hero(77, "lycan"));
+            _heroes.Add(new Hero(78, "brewmaster"));
+            _heroes.Add(new Hero(79, "shadow_demon"));
+            _heroes.Add(new Hero(80, "lone_druid"));
+            _heroes.Add(new Hero(81, "chaos_knight"));
+            _heroes.Add(new Hero(82, "meepo"));
+            _heroes.Add(new Hero(83, "treant_protector"));
+            _heroes.Add(new Hero(84, "ogre_magi"));
+            _heroes.Add(new Hero(85, "undying"));
+            _heroes.Add(new Hero(86, "rubick"));
+            _heroes.Add(new Hero(87, "disruptor"));
+            _heroes.Add(new Hero(88, "nyx_assassin"));
+            _heroes.Add(new Hero(89, "naga_siren"));
+            _heroes.Add(new Hero(90, "keeper_of_the_light"));
+            _heroes.Add(new Hero(91, "io"));
+            _heroes.Add(new Hero(92, "visage"));
+            _heroes.Add(new Hero(93, "slark"));
+            _heroes.Add(new Hero(94, "medusa"));
+            _heroes.Add(new Hero(95, "troll_warlord"));
+            _heroes.Add(new Hero(96, "centaur_warrunner"));
+            _heroes.Add(new Hero(97, "magnus"));
+            _heroes.Add(new Hero(98, "timbersaw"));
+            _heroes.Add(new Hero(99, "bristleback"));
+            _heroes.Add(new Hero(100, "tusk"));
+            _heroes.Add(new Hero(101, "skywrath_mage"));
+            _heroes.Add(new Hero(102, "abaddon"));
+            _heroes.Add(new Hero(103, "elder_titan"));
+            _heroes.Add(new Hero(104, "legion_commander"));
+            _heroes.Add(new Hero(105, "techies"));
+            _heroes.Add(new Hero(106, "ember_spirit"));
+            _heroes.Add(new Hero(107, "earth_spirit"));
+            _heroes.Add(new Hero(108, "underlord"));
+            _heroes.Add(new Hero(109, "terrorblade"));
+            _heroes.Add(new Hero(110, "phoenix"));
+            _heroes.Add(new Hero(111, "oracle"));
+            _heroes.Add(new Hero(112, "winter_wyvern"));
+            _heroes.Add(new Hero(113, "arc_warden"));
+            _heroes.Add(new Hero(114, "monkey_king"));
+            _heroes.Add(new Hero(119, "dark_willow"));
+            _heroes.Add(new Hero(120, "pangolier"));
+            _heroes.Add(new Hero(121, "grimstroke"));
+            _heroes.Add(new Hero(129, "mars"));
         }
         
         private void RadiantPick(string heroName, int playerNumber)
         {
 
-            if (radiantLabel[playerNumber].Text.Equals("Radiant" + (playerNumber + 1)))
+            if (_radiantLabel[playerNumber].Text.Equals("Radiant" + (playerNumber + 1)))
             {
-                radiantLabel[playerNumber].Invoke(new Action(() => radiantLabel[playerNumber].Text = heroName));
+                _radiantLabel[playerNumber].Invoke(new Action(() => _radiantLabel[playerNumber].Text = heroName));
             }
 
         }
         
         private void DirePick(string heroName, int playerName) {
-            if (direLabel[playerName].Text.Equals("Dire" + (playerName + 1)))
+            if (_direLabel[playerName].Text.Equals("Dire" + (playerName + 1)))
             {
-                direLabel[playerName].Invoke(new Action(() => direLabel[playerName].Text = heroName));
+                _direLabel[playerName].Invoke(new Action(() => _direLabel[playerName].Text = heroName));
             }
         }
 
@@ -471,10 +467,10 @@ namespace DotAAnalyzer
         {
             for (int i=0; i<5; i++)
             {
-                radiantLabel[i].Invoke(new Action(() => radiantLabel[i].Text = "Radiant" + (i+1)));
-                direLabel[i].Invoke(new Action(() => direLabel[i].Text = "Dire" + (i+1)));
-                radiantPictureBox[i].Invoke(new Action(() => radiantPictureBox[i].Image = null));
-                direPictureBox[i].Invoke(new Action(() => direPictureBox[i].Image = null));
+                _radiantLabel[i].Invoke(new Action(() => _radiantLabel[i].Text = "Radiant" + (i+1)));
+                _direLabel[i].Invoke(new Action(() => _direLabel[i].Text = "Dire" + (i+1)));
+                _radiantPictureBox[i].Invoke(new Action(() => _radiantPictureBox[i].Image = null));
+                _direPictureBox[i].Invoke(new Action(() => _direPictureBox[i].Image = null));
             }
         }
 
